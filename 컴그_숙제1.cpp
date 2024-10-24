@@ -50,15 +50,146 @@ char* filetobuf(const char* file);
 void clear_mat();
 void move(glm::mat4& trans, Vertex move);
 void spin(glm::mat4& trans, Vertex spin);
+void vector_spin(std::vector<Model>& m, int num, Vertex mid, Vertex spin);
+void mid_spin(glm::mat4& trans, Vertex mid, Vertex spin);
 void scale(glm::mat4& trans);
 
 Vertex mousevec(int x, int y);
 float sign(Vertex v1, Vertex v2, Vertex v3);
 bool dot_in_tri(Vertex p, Vertex v1, Vertex v2, Vertex v3);
 
-bool ckmodel(Model m , Vertex p) {
+Vertex middle_Vertex(std::vector<Vertex> vertices) {
+	Vertex m_v = { 0,0,0 };
+	for (int i = 0; i < vertices.size(); i++) {
+		m_v.x += vertices[i].x;
+		m_v.y += vertices[i].y;
+		m_v.z += vertices[i].z;
+	}
+	m_v.x /= vertices.size();
+	m_v.y /= vertices.size();
+	m_v.z /= vertices.size();
+	return m_v;
+}
+
+
+void change_line(glm::mat4 t , Vertex &p1, Vertex &p2) {
+	glm::mat4 inv = glm::inverse(t);
+	glm::vec4 vertexPosition(p1.x, p1.y, p1.z, 1.0f);
+	glm::vec4 vertexPosition2(p2.x, p2.y, p2.z, 1.0f);
+
+	glm::vec4 transformedPosition = inv * vertexPosition;
+	glm::vec4 transformedPosition2 = inv * vertexPosition2;
+
+	p1.x = transformedPosition.x;
+	p1.y = transformedPosition.y;
+	p1.z = transformedPosition.z;
+
+	p2.x = transformedPosition2.x;
+	p2.y = transformedPosition2.y;
+	p2.z = transformedPosition2.z;
+}
+bool cut_check(Model m, glm::mat4 t, Vertex &p1, Vertex &p2) {
+	glm::mat4 inv = glm::inverse(t);
+	glm::vec4 vertexPosition(p1.x, p1.y, p1.z, 1.0f);
+	glm::vec4 vertexPosition2(p2.x, p2.y, p2.z, 1.0f);
+	glm::vec4 transformedPosition = inv * vertexPosition;
+	glm::vec4 transformedPosition2 = inv * vertexPosition2;
+
+	p1.x = transformedPosition.x;
+	p1.y = transformedPosition.y;
+	p1.z = transformedPosition.z;
+
+	p2.x = transformedPosition2.x;
+	p2.y = transformedPosition2.y;
+	p2.z = transformedPosition2.z;
+
+	Vertex m_v = middle_Vertex(m.vertices);
 
 	return 0;
+}
+bool ck_line(Vertex AP1, Vertex AP2,Vertex BP1, Vertex BP2 , Vertex &ip){
+	float t;
+	float s;
+	float under = (BP2.y - BP1.y) * (AP2.x - AP1.x) - (BP2.x - BP1.x) * (AP2.y - AP1.y);
+	if (under == 0) return false;
+
+	float _t = (BP2.x - BP1.x) * (AP1.y - BP1.y) - (BP2.y - BP1.y) * (AP1.x - BP1.x);
+	float _s = (AP2.x - AP1.x) * (AP1.y - BP1.y) - (AP2.y - AP1.y) * (AP1.x - BP1.x);
+
+	t = _t / under;
+	s = _s / under;
+
+	if (t < 0.0 || t>1.0 || s < 0.0 || s>1.0) return false;
+	if (_t == 0 && _s == 0) return false;
+
+	ip.x = BP1.x + s * (BP2.x - BP1.x);
+	ip.y = BP1.y + s * (BP2.y - BP1.y);
+	ip.z = BP1.z + s * (BP2.z - BP1.z);
+
+	return true;
+}
+
+std::vector < Vertex > dots; //디버깅용
+
+bool model_cut(std::vector<Model> &m, int modelnum , glm::mat4 t, Vertex p1 ,Vertex p2) {
+	change_line(t, p1, p2);
+
+	dots.clear();
+	Vertex ck = {0,0,0};
+
+	Model up;
+	Model down;
+
+	for (int i = 0; i < m[modelnum].faces.size(); i++) {
+
+		if (ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v1], m[modelnum].vertices[m[modelnum].faces[i].v2], ck ) ) {
+			//std::cout << m[modelnum].faces[i].v1 << " , " << m[modelnum].faces[i].v2 << std::endl;
+			dots.push_back(ck);
+		}
+		if (
+			ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v2], m[modelnum].vertices[m[modelnum].faces[i].v3], ck)) {
+			//std::cout << m[modelnum].faces[i].v2 << " , " << m[modelnum].faces[i].v3 << std::endl;
+			dots.push_back(ck);
+		}
+		if (
+			ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v3], m[modelnum].vertices[m[modelnum].faces[i].v1], ck)) {
+			//std::cout << m[modelnum].faces[i].v3 << " , " << m[modelnum].faces[i].v1 << std::endl;
+			dots.push_back(ck);
+		}
+
+	}
+	for (int i = 0; i < dots.size(); i++) {
+		std::cout << dots[i].x <<", " << dots[i].y <<"," << dots[i].z << std::endl;
+	}
+
+
+	//m[modelnum].vertices[0] = p2;
+	return 0;
+}
+//나중에 지울지도
+void dots_spin(std::vector < Vertex > &vertices, Vertex mid, Vertex spin) {
+	glm::mat4 Rx = glm::mat4(1.0f); //--- 이동 행렬 선언
+	glm::mat4 Ry = glm::mat4(1.0f); //--- 회전 행렬 선언
+	glm::mat4 Rz = glm::mat4(1.0f); //--- 회전 행렬 선언
+
+	Rx = glm::rotate(Rx, glm::radians(spin.x), glm::vec3(1.0, 0.0, 0.0));
+	Ry = glm::rotate(Ry, glm::radians(spin.y), glm::vec3(0.0, 1.0, 0.0));
+	Rz = glm::rotate(Rz, glm::radians(spin.z), glm::vec3(0.0, 1.0, 0.0));
+
+	glm::mat4 transformMatrix(1.0f);
+	transformMatrix = glm::translate(transformMatrix, glm::vec3(-mid.x, -mid.y, -mid.z));
+	glm::mat4 inv = glm::inverse(transformMatrix);
+
+	for (size_t i = 0; i <vertices.size(); i++) {
+		glm::vec4 vertexPosition(vertices[i].x, vertices[i].y, vertices[i].z, 1.0f);
+		glm::vec4 transformedPosition = inv * Rx * Ry * Rz * transformMatrix * vertexPosition;
+
+		// 변환된 위치를 다시 model에 저장
+		vertices[i].x = transformedPosition.x;
+		vertices[i].y = transformedPosition.y;
+		vertices[i].z = transformedPosition.z;
+		//std::cout << spin.x << std::endl;
+	}
 }
 
 //--- 필요한 변수 선언-----------------------------------------------------------------------------------
@@ -73,8 +204,16 @@ GLuint vao, vbo[2], ebo;
 Vertex mouse;
 //---------------------------------------------------------------------------------------------------
 
-Model mid_line = { {{-1,0,0},{1,0,0},{0,-1,0},{0,1,0} }, {{0,1},{2,3}} };
+Model mid_line = { {{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1} }, };
+Model slice;
+
+std::vector<Model> models;
+
 Model model;
+glm::mat4 trans(1.0f);
+Vertex sp = { 30,-30,0 };
+Vertex mid = { -0.5,-0.5,-0.5 };
+Vertex v0 = middle_Vertex(model.vertices);
 Model dia;
 std::vector<Color> colors = {
 	{1.0, 0.0, 0.0}, // 빨간색
@@ -84,7 +223,14 @@ std::vector<Color> colors = {
 	{0.0, 1.0, 1.0}, // 시안
 	{1.0, 0.0, 1.0}, // 마젠타
 	{0.0, 0.0, 0.0}, // 검은색
-	{0.5, 0.5, 0.5}  // 흰색
+	{0.5, 0.5, 0.5},  // 흰색
+	////////
+	{ 1.0, 0.0, 0.0 }, // 빨간색
+	{0.0, 1.0, 0.0}, // 초록색
+	{0.0, 0.0, 1.0}, // 파란색
+	{1.0, 1.0, 0.0}, // 노란색
+	{0.0, 1.0, 1.0}, // 시안
+	{1.0, 0.0, 1.0} // 마젠타
 };
 bool cmdc = 1;
 bool cmdh = 1;
@@ -109,13 +255,18 @@ int main(int argc, char** argv) //--- 윈도우 출력하고 콜백함수 설정
 	loadOBJ("cube.obj", model);
 	//loadOBJ("dia.obj", dia);
 	
+	models.push_back(model);
+	//std::cout << "Vertices in dia: " << model.vertices.size() << std::endl;
+	//std::cout << "Faces in dia: " << model.faces.size() << std::endl;
 
-	std::cout << "Vertices in dia: " << model.vertices.size() << std::endl;
-	std::cout << "Faces in dia: " << model.faces.size() << std::endl;
-
-	for (int i = 0; i < model.faces.size(); i++) {
+	/*for (int i = 0; i < model.faces.size(); i++) {
 		std::cout << model.faces[i].v1 << "  " << model.faces[i].v2 << " " << model.faces[i].v3 << std::endl;
-	}
+	}*/
+
+	Vertex v0 =middle_Vertex(model.vertices);
+	scale(trans);
+	move(trans, mid);
+	//mid_spin(trans, v0, sp);
 
 	//InitBuffer(model);
 	shaderProgramID = make_shaderProgram();
@@ -141,37 +292,43 @@ GLvoid drawScene() //--- 콜백 함수: 그리기 콜백 함수
 	//glDisable(GL_CULL_FACE);
 
 	clear_mat();
-	InitBuffer(mid_line);
-
+	/*InitBuffer(mid_line);
 	glPointSize(5.0);
-	glDrawArrays(GL_LINES, 0, 4);
+	glDrawArrays(GL_LINES, 0, 4);*/
+	if (slice.vertices.size() == 2) {
+		InitBuffer(slice);
+		glPointSize(5.0);
+		glDrawArrays(GL_LINES, 0, 2);
+		//glm::mat4 inv = glm::inverse(trans); // 역행렬 계산
+		//unsigned int transformLocation2 = glGetUniformLocation(shaderID, "transform");
+		//glUniformMatrix4fv(transformLocation2, 1, GL_FALSE, glm::value_ptr(inv));
+		//InitBuffer(slice);
+		//glPointSize(5.0);
+		//glDrawArrays(GL_LINES, 0, 2);
+	}
+
 
 	Model cpy;
-	if (cmdc) {
-		cpy = model;
+	for (int i = 0; i < models.size(); i++) {
+		cpy = models[i];
+		unsigned int transformLocation = glGetUniformLocation(shaderID, "transform");
+		glUniformMatrix4fv(transformLocation, 1, GL_FALSE, glm::value_ptr(trans));
+		InitBuffer(cpy);
+		if (cmdw) {
+			glDrawElements(GL_TRIANGLES, cpy.faces.size() * 3, GL_UNSIGNED_INT, 0);
+		}
+		else {
+			glDrawElements(GL_LINE_STRIP, cpy.faces.size() * 3, GL_UNSIGNED_INT, 0);
+		}
 	}
 
-	glm::mat4 trans(1.0f);
-	Vertex sp = { 30,-30,0 };
-	Vertex mid = { -0.5,-0.5,-0.5 };
+	//glm::mat4 inv = glm::inverse(trans); // 역행렬 계산
+	//clear_mat();
+	Model mod = { dots };
+	InitBuffer(mod);
+	glPointSize(5.0);
+	glDrawArrays(GL_POINTS, 0, dots.size());
 
-	move(trans, move_model);
-	spin(trans, spin_model);
-	scale(trans);
-	spin(trans, sp);
-	move(trans, mid);
-
-	unsigned int transformLocation = glGetUniformLocation(shaderID, "transform");
-	glUniformMatrix4fv(transformLocation, 1, GL_FALSE, glm::value_ptr(trans));
-
-	InitBuffer(cpy);
-	//glBindVertexArray(vao);
-	if (cmdw) {
-		glDrawElements(GL_TRIANGLES, cpy.faces.size() * 3, GL_UNSIGNED_INT, 0);
-	}
-	else {
-		glDrawElements(GL_LINE_STRIP, cpy.faces.size() * 3, GL_UNSIGNED_INT, 0);
-	}
 	glutSwapBuffers(); // 화면에 출력하기
 	//glutSwapBuffers(); // 화면에 출력하기
 }
@@ -192,13 +349,13 @@ void Keyboard(unsigned char key, int x, int y)
 		cmdw = !cmdw;
 		break;
 	case 'x':
-		spin2[0] = (spin2[0] == 0) ? 1 : 0;
+		spin_model.x = (spin_model.x == 0) ? 1 : 0;
 		break;
 	case 'X':
-		spin2[0] = (spin2[0] == 0) ? -1 : 0;
+		spin_model.x = (spin_model.x == 0) ? -1 : 0;
 		break;
 	case 'y':
-		spin2[1] = (spin2[1] == 0) ? 1 : 0;
+		spin_model.y = (spin_model.y == 0) ? 1 : 0;
 		break;
 	case 'Y':
 		spin2[1] = (spin2[1] == 0) ? -1 : 0;
@@ -215,16 +372,20 @@ void SpecialKeyboard(int key, int x, int y)
 {
 	switch (key) {
 	case GLUT_KEY_UP:
-		move_model.y += 0.1;
+		move_model = {0,0.1,0};
+		move(trans, move_model);
 		break;
 	case GLUT_KEY_DOWN:
-		move_model.y -= 0.1;
+		move_model = { 0,-0.1,0 };
+		move(trans, move_model);
 		break;
 	case GLUT_KEY_RIGHT:
-		move_model.x += 0.1;
+		move_model = {0.1,0,0 };
+		move(trans, move_model);
 		break;
 	case GLUT_KEY_LEFT:
-		move_model.x -= 0.1;
+		move_model = { -0.1,0,0 };
+		move(trans, move_model);
 		break;
 	}
 
@@ -232,24 +393,47 @@ void SpecialKeyboard(int key, int x, int y)
 
 void Mouse(int button, int state, int x, int y)
 {
+	
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
 		mouse = mousevec(x, y);
-
+		slice.vertices.push_back(mouse);
+	}
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+		//mouse = mousevec(x, y);
+		model_cut(models, 0, trans, slice.vertices[0], slice.vertices[1]);
+		slice.vertices.clear();
+		//change_line(trans, slice.vertices[0], slice.vertices[1]);
 	}
 	std::cout << "x = " << mouse.x << " y = " << mouse.y << std::endl;
 }
 void Motion(int x, int y)
 {
-
+	mouse = mousevec(x, y);
+	if (slice.vertices.size() == 1) {
+		slice.vertices.push_back(mouse);
+	}
+	else if (slice.vertices.size() == 2) {
+		slice.vertices[1] = mouse;
+		//change_line(trans, slice.vertices[0], slice.vertices[1]);
+		//std::cout << slice.vertices[0].x << std::endl;
+	}
 
 }
 
 void TimerFunction(int value)
 {
-	spin_model.x += spin2[0];
-	spin_model.y += spin2[1];
+	//mid_spin(trans, v0, spin_model);
+
+	Vertex v0 = middle_Vertex(model.vertices);
+	//mid_spin(trans, v0, spin_model);
+	vector_spin(models, 0, v0, spin_model);
+	dots_spin(dots, v0, spin_model);
+
+
+	//spin_model.x += spin2[0];
+	//spin_model.y += spin2[1];
 	glutPostRedisplay(); // 화면 재 출력
-	glutTimerFunc(100, TimerFunction, 1); // 타이머함수 재 설정
+	glutTimerFunc(10, TimerFunction, 1); // 타이머함수 재 설정
 }
 
 
@@ -364,6 +548,46 @@ void spin(glm::mat4& trans, Vertex spin) {
 	trans *= Rz;
 
 }
+void mid_spin(glm::mat4& trans, Vertex mid, Vertex spin) {
+	glm::mat4 transformMatrix(1.0f);
+	transformMatrix = glm::translate(transformMatrix, glm::vec3(-mid.x, -mid.y, -mid.z));
+	glm::mat4 inv = glm::inverse(transformMatrix);
+
+	glm::mat4 Rx = glm::mat4(1.0f); //--- 이동 행렬 선언
+	glm::mat4 Ry = glm::mat4(1.0f); //--- 회전 행렬 선언
+	glm::mat4 Rz = glm::mat4(1.0f); //--- 회전 행렬 선언
+
+	Rx = glm::rotate(Rx, glm::radians(spin.x), glm::vec3(1.0, 0.0, 0.0));
+	Ry = glm::rotate(Ry, glm::radians(spin.y), glm::vec3(0.0, 1.0, 0.0));
+	Rz = glm::rotate(Rz, glm::radians(spin.z), glm::vec3(0.0, 1.0, 0.0));
+
+
+	trans = trans * inv *Rx*Ry*Rz *transformMatrix;
+}
+void vector_spin(std::vector<Model>& m, int num, Vertex mid,Vertex spin) {
+	glm::mat4 Rx = glm::mat4(1.0f); //--- 이동 행렬 선언
+	glm::mat4 Ry = glm::mat4(1.0f); //--- 회전 행렬 선언
+	glm::mat4 Rz = glm::mat4(1.0f); //--- 회전 행렬 선언
+
+	Rx = glm::rotate(Rx, glm::radians(spin.x), glm::vec3(1.0, 0.0, 0.0));
+	Ry = glm::rotate(Ry, glm::radians(spin.y), glm::vec3(0.0, 1.0, 0.0));
+	Rz = glm::rotate(Rz, glm::radians(spin.z), glm::vec3(0.0, 1.0, 0.0));
+
+	glm::mat4 transformMatrix(1.0f);
+	transformMatrix = glm::translate(transformMatrix, glm::vec3(-mid.x, -mid.y, -mid.z));
+	glm::mat4 inv = glm::inverse(transformMatrix);
+
+	for (size_t i = 0; i < m[num].vertices.size(); i++) {
+		glm::vec4 vertexPosition(m[num].vertices[i].x, m[num].vertices[i].y, m[num].vertices[i].z, 1.0f);
+		glm::vec4 transformedPosition = inv * Rx * Ry * Rz * transformMatrix * vertexPosition;
+
+		// 변환된 위치를 다시 model에 저장
+		m[num].vertices[i].x = transformedPosition.x;
+		m[num].vertices[i].y = transformedPosition.y;
+		m[num].vertices[i].z = transformedPosition.z;
+		//std::cout << spin.x << std::endl;
+	}
+}
 void scale(glm::mat4& trans) {
 	glm::mat4 sc = glm::mat4(1.0f);
 	sc = glm::scale(sc, glm::vec3(0.5, 0.5, 0.5));
@@ -409,7 +633,7 @@ bool dot_in_tri(Vertex p, Vertex v1, Vertex v2, Vertex v3) {
 	}
 }
 */
-
+//-------------------------------------------------------------------------------
 //--- 다시그리기 콜백 함수
 GLvoid Reshape(int w, int h) //--- 콜백 함수: 다시 그리기 콜백 함수
 {
