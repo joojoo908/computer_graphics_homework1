@@ -33,6 +33,7 @@ struct Face {
 };
 struct Model {
 	std::vector<Vertex> vertices;
+	std::vector<Color> colors;
 	std::vector<Face> faces;
 };
 
@@ -60,6 +61,11 @@ void scale(glm::mat4& trans);
 Vertex mousevec(int x, int y);
 float len_notsqrt(Vertex v1, Vertex v2);
 float len(Vertex v1, Vertex v2);
+Vertex subtract(Vertex a, Vertex b) {
+	return { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+//외적
+Vertex crossProduct(const Vertex& v1, const Vertex& v2);
 float sign(Vertex v1, Vertex v2, Vertex v3);
 bool dot_in_tri(Vertex p, Vertex v1, Vertex v2, Vertex v3);
 
@@ -76,7 +82,13 @@ Vertex middle_Vertex(std::vector<Vertex> vertices) {
 	return m_v;
 }
 
-
+void change_dot(glm::mat4 t, Vertex& p1) {
+	glm::vec4 vertexPosition(p1.x, p1.y, p1.z, 1.0f);
+	glm::vec4 transformedPosition = t * vertexPosition;
+	p1.x = transformedPosition.x;
+	p1.y = transformedPosition.y;
+	p1.z = transformedPosition.z;
+}
 void change_line(glm::mat4 t , Vertex &p1, Vertex &p2) {
 	glm::mat4 inv = glm::inverse(t);
 	glm::vec4 vertexPosition(p1.x, p1.y, p1.z, 1.0f);
@@ -93,13 +105,56 @@ void change_line(glm::mat4 t , Vertex &p1, Vertex &p2) {
 	p2.y = transformedPosition2.y;
 	p2.z = transformedPosition2.z;
 }
-bool cut_check(Model m, glm::mat4 t, Vertex &p1, Vertex &p2) {
-	change_line(t, p1, p2);
+bool cut_check(Model m, Vertex &p1, Vertex &p2) {
+	//change_line(t, p1, p2);
 	Vertex m_v = middle_Vertex(m.vertices);
+	float ln =len_notsqrt(m_v, m.vertices[0]);
 
+	float tx = p1.x - m_v.x;
+	float ty = p1.y - m_v.y;
+
+	// (x- m_v.x)^2 + (y - m_v.y)^2 = ln
+	// 
+	// x = p1.x + t*(p2.x-p1.x)
+	// y = p1.y + t*(p2.y-p1.y)
+	// (p1.x + t*p2.x - m_v.x)^2 + (p1.y + t*p2.y - m_v.y)^2 = ln
+
+	//(tx+t*p2.x)^2 + (ty+t*p2.y)^2 = ln
+	// (p2.x)^2 *t^2 + 2t* (p2.x*tx) + tx^2   +   
+	
+	float a = ((p2.x - p1.x) *(p2.x - p1.x)) + ((p2.y - p1.y) * (p2.y - p1.y));
+	float b = 2 * (p2.x - p1.x) * tx + 2 * (p2.y - p1.y) * ty;
+	float c = tx * tx + ty * ty -ln;
+	float dx = (a*a) - 4 * b * c;
+	if (dx > 0) {
+		/*if (ln < len_notsqrt(m_v, p1) && ln < len_notsqrt(m_v, p2)) {
+			std::cout << "true" << std::endl;
+			return 1;
+		}*/
+		float t1 = (-b + sqrt(dx)) / 2 / a;
+		float t2 = (-b - sqrt(dx)) / 2 / a;
+		std::cout << "t1: " << t1 << "  t2" << t2 << std::endl;
+		if (0.8 < t1  && t1<1.8  && 0<-t2 && -t2<1) {
+			std::cout << "true" << std::endl;
+			return 1;
+		}
+		std::cout << "fail" << std::endl;
+	}
 	return 0;
 }
-bool ck_line(Vertex AP1, Vertex AP2,Vertex BP1, Vertex BP2 , Vertex &ip){
+bool ck_line2dot(Vertex a, Vertex b, Vertex p) {
+	float minX = std::min(a.x, b.x);
+	float maxX = std::max(a.x, b.x);
+	float minY = std::min(a.y, b.y);
+	float maxY = std::max(a.y, b.y);
+	float minZ = std::min(a.z, b.z);
+	float maxZ = std::max(a.z, b.z);
+
+	return (p.x >= minX && p.x <= maxX) &&
+		(p.y >= minY && p.y <= maxY) &&
+		(p.z >= minZ && p.z <= maxZ);
+}
+bool ck_line(Vertex AP1, Vertex AP2,Vertex BP1, Vertex BP2 , Vertex &ip , float &pnt){
 	float t;
 	float s;
 	float under = (BP2.y - BP1.y) * (AP2.x - AP1.x) - (BP2.x - BP1.x) * (AP2.y - AP1.y);
@@ -117,24 +172,95 @@ bool ck_line(Vertex AP1, Vertex AP2,Vertex BP1, Vertex BP2 , Vertex &ip){
 	ip.x = BP1.x + s * (BP2.x - BP1.x);
 	ip.y = BP1.y + s * (BP2.y - BP1.y);
 	ip.z = BP1.z + s * (BP2.z - BP1.z);
+	pnt = s;
+
 
 	return true;
 }
-bool ck_line2dot(Vertex AP1, Vertex AP2, Vertex ip) {
-	float ep = 0.000001;
-	//float t;
-	float linex = (AP2.x - AP1.x) != 0 ? (ip.x - AP1.x) / (AP2.x - AP1.x) : (ip.x - AP1.x);
-	float liney = (AP2.y - AP1.y) != 0 ? (ip.y - AP1.y) / (AP2.y - AP1.y) : (ip.y - AP1.y);
-	float linez = (AP2.z - AP1.z) != 0 ? (ip.z - AP1.z) / (AP2.z - AP1.z) : (ip.z - AP1.z);
-
-	if(ABS(linex-liney) > ep )return false;
-	if(ABS(linex-linez) > ep )return false;
-	if(ABS(liney-linez) > ep )return false;
-	if (linex < 0.0 || linex>1.0 ) return false;
-	std::cout << "true" << std::endl;
-	return true;
+void blend_cor(Color a, Color b, Color &p ,float pnt) {
+	p.r = (a.r*(1-pnt) + b.r*pnt) ;
+	p.g = (a.g*(1-pnt) + b.g*pnt) ;
+	p.b = (a.b*(1-pnt) + b.b*pnt) ;
+	
 }
+bool ck_line_3d(Vertex A, Vertex B, Vertex C, Vertex D) {
 
+	if (A.x == C.x && A.y == C.y && A.z == C.z) {
+		return false;
+	}
+	if (B.x == C.x && B.y == C.y && B.z == C.z) {
+		return false;
+	}
+	if (A.x == D.x && A.y == D.y && A.z == D.z) {
+		return false;
+	}
+	if (B.x == D.x && B.y == D.y && B.z == D.z) {
+		return false;
+	}
+
+	Vertex AB = subtract(B, A);
+	Vertex AC = subtract(C, A);
+	Vertex AD = subtract(D, A);
+	Vertex CD = subtract(D, C);
+
+	Vertex crossAB_CD = crossProduct(AB, CD);
+	float denom = crossAB_CD.x * crossAB_CD.x + crossAB_CD.y * crossAB_CD.y + crossAB_CD.z * crossAB_CD.z;
+
+	if (denom == 0) {
+		// 평행한 경우
+		if (ck_line2dot(A, B, C))return true;
+		if (ck_line2dot(A, B, D))return true;
+		if (ck_line2dot(C, D, A))return true;
+		if (ck_line2dot(C, D, B))return true;
+		return false;
+	}
+	
+	float t = (crossProduct(AC, CD).x * crossAB_CD.x +
+		crossProduct(AC, CD).y * crossAB_CD.y +
+		crossProduct(AC, CD).z * crossAB_CD.z) / denom;
+
+	float s = (crossProduct(AC, AB).x * crossAB_CD.x +
+		crossProduct(AC, AB).y * crossAB_CD.y +
+		crossProduct(AC, AB).z * crossAB_CD.z) / denom;
+	//std::cout << "4통과" << std::endl;
+	return (t >= 0 && t <= 1) && (s >= 0 && s <= 1);
+}
+bool ck_face(std::vector<Face>& faces, Face f, std::vector < Vertex > dots, int n) {
+	Vertex AB = {dots[f.v2].x - dots[f.v1].x ,dots[f.v2].y - dots[f.v1].y,dots[f.v2].z - dots[f.v1].z }; // 벡터 AB
+	Vertex AC = { dots[f.v3].x - dots[f.v1].x ,dots[f.v3].y - dots[f.v1].y,dots[f.v3].z - dots[f.v1].z }; // 벡터 AC
+
+	Vertex cross = crossProduct(AB, AC); // AB와 AC의 외적
+
+	// 외적의 크기가 0인지 확인 (임계값을 사용할 수 있음)
+	float epsilon = 1e-6; // 오차 범위
+	if ((cross.x * cross.x + cross.y * cross.y + cross.z * cross.z) < (epsilon * epsilon)) {
+		//std::cout << "일직선" << std::endl;
+		return 0;
+	}
+
+	
+	for (int i = 0; i < faces.size(); i++) {
+		//if(faces[i].v1 - n == f.v1)
+		if (ck_line_3d(dots[faces[i].v1-n], dots[faces[i].v2-n], dots[f.v1], dots[f.v2])) return 0;
+		if (ck_line_3d(dots[faces[i].v2 - n], dots[faces[i].v3 - n], dots[f.v1], dots[f.v2])) return 0;
+		if (ck_line_3d(dots[faces[i].v1 - n], dots[faces[i].v3 - n], dots[f.v1], dots[f.v2])) return 0;
+		//std::cout << "1통과" << std::endl;
+		if (ck_line_3d(dots[faces[i].v1 - n], dots[faces[i].v2 - n], dots[f.v2], dots[f.v3])) return 0;
+		if (ck_line_3d(dots[faces[i].v2 - n], dots[faces[i].v3 - n], dots[f.v2], dots[f.v3])) return 0;
+		if (ck_line_3d(dots[faces[i].v1 - n], dots[faces[i].v3 - n], dots[f.v2], dots[f.v3])) return 0;
+		//std::cout << "2통과" << std::endl;
+		if (ck_line_3d(dots[faces[i].v1 - n], dots[faces[i].v2 - n], dots[f.v3], dots[f.v1])) return 0;//??왠지는 모름
+		if (ck_line_3d(dots[faces[i].v2 - n], dots[faces[i].v3 - n], dots[f.v1], dots[f.v3])) return 0;
+		if (ck_line_3d(dots[faces[i].v1 - n], dots[faces[i].v3 - n], dots[f.v1], dots[f.v3])) return 0;
+		//std::cout << "3통과" << std::endl;
+	}
+	
+	f.v1 += n;
+	f.v2 += n;
+	f.v3 += n;
+	faces.push_back(f);
+	return 1;
+}
 
 bool plus_dot(std::vector < Vertex > &dots , Vertex ck) {
 	float ep = 0.000001;
@@ -151,78 +277,48 @@ int find_face(std::vector < Vertex > dots, Vertex ck) {
 	float ep = 0.000001;
 	for (int i = 0; i < dots.size(); i++) {
 		if (ABS(dots[i].x - ck.x) < ep && ABS(dots[i].y - ck.y) < ep && ABS(dots[i].z - ck.z) < ep) {
-			std::cout << "x: " << ck.x << " y: " << ck.y << " z: " << ck.z << std::endl;
-			std::cout << "x: " << dots[i].x << " y: " << dots[i].y << " z: " << dots[i].z << std::endl;
 			return i;
 		}
 	}
 	return -1;
 }
 void make_face(std::vector<Face> &newface, std::vector < Vertex > dots, int n) {
-	std::vector < bool > cpydot(dots.size());
-	Face f1;
-	int dnum = dots.size();
-	int cnt = 0;
-	std::cout << " dnum: " << dnum << std::endl;
-	for (int i = 0; i < dnum-1; i++) {
-		for (int j = i+1; j < dnum; j++) {
-			for (int k = 0; k < dnum; k++) {
-				if (k != i && k != j) {
-					if (ck_line2dot(dots[i], dots[j], dots[k])) {
-						cpydot[k] = 1;
-						cnt++;
-					}
-					else {
-
-					}
-				}
+	std::vector<Face> faces;
+	Face f;
+	for (int i = 0; i < dots.size() - 2; i++) {
+		for (int j = i + 1; j < dots.size()-1; j++) {
+			for (int k = j + 1; k < dots.size(); k++) {
+				f.v1 = i;
+				f.v2 = j;
+				f.v3 = k;
+				//std::cout << "facenum:" << i << " , " << j << " , " << k << std::endl;
+				bool tu = ck_face(faces, f, dots,n);
+				//std::cout << tu << std::endl;
 			}
 		}
 	}
-	std::cout << " cnt: " << cnt << std::endl;
-	for (int i = 0; i < cpydot.size(); i++) {
-		std::cout << " bool: " << cpydot[i] << std::endl;
-	}
-
-	/*
-	float t1 = 0, t2 = 0, t3 = 0;
-	int n1, n2, n3, n4,n5,n6;
-	for (int i = 0; i < dots.size() -1; i++) {
-		for (int j = i+1; j < dots.size(); j++) {
-			if (len_notsqrt(dots[i], dots[j]) > t1) {
-				t1 = len_notsqrt(dots[i], dots[j]);
-				n1 = i;
-				n2 = j;
-			}
-			else if (len_notsqrt(dots[i], dots[j]) > t2) {
-				t2 = len_notsqrt(dots[i], dots[j]);
-				n3 = i;
-				n4 = j;
-			}
-		}
-	}
-	//std::cout << "t1,t2,t3,t4 :" << n1 << "," << n2 << "," << n3 << "," << n4 << std::endl;
-	Face f1;
-	f1.v1 = n+n1;
-	f1.v2 = n+n2;
-	f1.v3 = n+n3;
-	newface.push_back(f1);
-	f1.v1 = n + n1;
-	f1.v2 = n + n2;
-	f1.v3 = n + n4;
-	newface.push_back(f1);
-	*/
+	//std::cout << "faces size:" << faces.size() << std::endl;
+	newface.insert(newface.end(), faces.begin(), faces.end());
 }
 
- //디버깅용
+
 bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Vertex> &v, int modelnum , Vertex p1 ,Vertex p2 ) {
 	change_line(t[modelnum], p1, p2);
+	
+	if (!cut_check(m[modelnum], p1, p2)) {
+		//std::cout << "fail" << std::endl;
+		return 0;
+	}
+	
 	std::vector < Vertex > dots;
+	std::vector < Color > cols;
 	//dots.clear(); //나중에 도트 위치 옮기기
 	Vertex ck = {0,0,0};
+	Color cc = {0,0,0};
+	float pnt=0;
 	Model up;
 	Model down;
-	//(p2.y-p1.y)(p2.x-p1.x)(x-p1.x) + p1.y = y
+	
 	Vertex vec;
 	std::vector < int > ck_up;
 	std::vector < int > ck_down;
@@ -232,12 +328,14 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 			vec = m[modelnum].vertices[i];
 			if (vec.y > p1.y) {
 				up.vertices.push_back(vec);
+				up.colors.push_back(m[modelnum].colors[i]);
 				ck_up.push_back(up_ck);
 				ck_down.push_back(-1);
 				up_ck++;
 			}
 			else {
 				down.vertices.push_back(vec);
+				down.colors.push_back(m[modelnum].colors[i]);
 				ck_up.push_back(-1);
 				ck_down.push_back(down_ck);
 				down_ck++;
@@ -250,6 +348,7 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 			if ( vec.y > ((p2.y - p1.y)/(p2.x - p1.x))*(vec.x - p1.x) + p1.y  ) {
 				//std::cout << "bug ck 10" << std::endl;
 				up.vertices.push_back(vec);
+				up.colors.push_back(m[modelnum].colors[i]);
 				ck_up.push_back(up_ck);
 				ck_down.push_back(-1);
 				up_ck++;
@@ -257,6 +356,7 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 			else {
 				//std::cout << "bug ck 20" << std::endl;
 				down.vertices.push_back(vec);
+				down.colors.push_back(m[modelnum].colors[i]);
 				ck_up.push_back(-1);
 				ck_down.push_back(down_ck);
 				down_ck++;
@@ -264,8 +364,6 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 		}
 
 	}
-
-
 
 	if (up_ck  == m[modelnum].vertices.size()) {
 		return 0;
@@ -280,8 +378,11 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 		Vertex check3[3] = {};
 		int check3_int[3] = {};
 		bool check3_bool[3] = {0,0,0};
-		if (ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v1], m[modelnum].vertices[m[modelnum].faces[i].v2], ck)) {
-			plus_dot(dots, ck);
+		if (ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v1], m[modelnum].vertices[m[modelnum].faces[i].v2], ck, pnt)) {
+			if (plus_dot(dots, ck)) {
+				blend_cor(m[modelnum].colors[m[modelnum].faces[i].v1], m[modelnum].colors[m[modelnum].faces[i].v2], cc, pnt);
+				cols.push_back(cc);
+			}
 			if (plus_dot(m[modelnum].vertices, ck)) {
 				check3_int[0] = m[modelnum].vertices.size() - 1;
 			}
@@ -292,9 +393,11 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 			check3_bool[0] = 1;
 			//cnt++;
 		}
-		if (ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v2], m[modelnum].vertices[m[modelnum].faces[i].v3], ck)) {
-			plus_dot(dots, ck);
-			//plus_dot(m[modelnum].vertices, ck);
+		if (ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v2], m[modelnum].vertices[m[modelnum].faces[i].v3], ck, pnt)) {
+			if (plus_dot(dots, ck)) {
+				blend_cor(m[modelnum].colors[m[modelnum].faces[i].v2], m[modelnum].colors[m[modelnum].faces[i].v3], cc, pnt);
+				cols.push_back(cc);
+			}
 			if (plus_dot(m[modelnum].vertices, ck)) {
 				check3_int[1] = m[modelnum].vertices.size() - 1;
 			}
@@ -305,9 +408,11 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 			check3_bool[1] = 1;
 			//cnt++;
 		}
-		if (ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v3], m[modelnum].vertices[m[modelnum].faces[i].v1], ck)) {
-			plus_dot(dots, ck);
-			//plus_dot(m[modelnum].vertices, ck);
+		if (ck_line(p1, p2, m[modelnum].vertices[m[modelnum].faces[i].v3], m[modelnum].vertices[m[modelnum].faces[i].v1], ck, pnt)) {
+			if (plus_dot(dots, ck)) {
+				blend_cor(m[modelnum].colors[m[modelnum].faces[i].v3], m[modelnum].colors[m[modelnum].faces[i].v1], cc, pnt);
+				cols.push_back(cc);
+			}
 			if (plus_dot(m[modelnum].vertices, ck)) {
 				check3_int[2] = m[modelnum].vertices.size() - 1;
 			}
@@ -369,10 +474,11 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 			newface.push_back(f);
 		}
 	}
-
+	//std::cout << "2" << std::endl;
+	//---------자주터짐--------------------------------
 	make_face(newface, dots, n);
 	m[modelnum].faces.insert(m[modelnum].faces.end(), newface.begin(), newface.end());
-
+	//std::cout << "3" << std::endl;
 	for (int i = 0; i < dots.size(); i++) {
 		ck_up.push_back(up_ck);
 		ck_down.push_back(down_ck);
@@ -380,8 +486,10 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 		down_ck++;
 	}
 	up.vertices.insert(up.vertices.end(), dots.begin(), dots.end());
+	up.colors.insert(up.colors.end(), cols.begin(), cols.end());
 	down.vertices.insert(down.vertices.end(), dots.begin(), dots.end());
-
+	down.colors.insert(down.colors.end(), cols.begin(), cols.end());
+	//std::cout << "3" << std::endl;
 	Face updown_f;
 	for (int i = 0; i < m[modelnum].faces.size(); i++) {
 		if (ck_up[m[modelnum].faces[i].v1] != -1 && ck_up[m[modelnum].faces[i].v2] != -1 && ck_up[m[modelnum].faces[i].v3] != -1) {
@@ -457,11 +565,11 @@ std::vector<glm::mat4> model_trans;
 std::vector<Vertex> model_move;
 
 Model model;
+Model dia;
 glm::mat4 trans(1.0f);
 Vertex sp = { 30,-30,0 };
-Vertex mid = { -0.5,-0.5,-0.5 };
+Vertex mid = { 4,-0.5,-0.5 };
 Vertex v0 = middle_Vertex(model.vertices);
-Model dia;
 std::vector<Color> colors = {
 	{1.0, 0.0, 0.0}, // 빨간색
 	{0.0, 1.0, 0.0}, // 초록색
@@ -477,6 +585,12 @@ std::vector<Color> colors = {
 	{0.0, 0.0, 1.0}, // 파란색
 	{1.0, 1.0, 0.0}, // 노란색
 	{0.0, 1.0, 1.0}, // 시안
+	{1.0, 0.0, 1.0}, // 마젠타
+	{ 1.0, 0.0, 0.0 }, // 빨간색
+	{0.0, 1.0, 0.0}, // 초록색
+	{0.0, 0.0, 1.0}, // 파란색
+	{1.0, 1.0, 0.0}, // 노란색
+	{0.0, 1.0, 1.0}, // 시안
 	{1.0, 0.0, 1.0} // 마젠타
 };
 bool cmdc = 1;
@@ -484,10 +598,11 @@ bool cmdh = 1;
 bool cmdw;
 bool puese = 1;
 int spin2[2] = { 0,0 };
-Vertex spin_model;
+Vertex spin_model = {1,1,0};
 Vertex move_model;
 
-int Timerspeed = 10;
+int Timerspeed = 80;
+int spone_cnt;
 
 //--------------------- 메인 함수----------------------------------------------------------------------------
 int main(int argc, char** argv) //--- 윈도우 출력하고 콜백함수 설정
@@ -495,21 +610,24 @@ int main(int argc, char** argv) //--- 윈도우 출력하고 콜백함수 설정
 	//--- 윈도우 생성하기
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH);
-	glutInitWindowPosition(300, 100);
+	glutInitWindowPosition(400, 100);
 	glutInitWindowSize(width, height);
 	glutCreateWindow("Example1"); //--- GLEW 초기화하기
 	glewExperimental = GL_TRUE;
 	glewInit();
 	//--- 세이더 읽어와서 세이더 프로그램 만들기
+	srand(time(NULL));
 
 	loadOBJ("cube.obj", model);
-	//loadOBJ("dia.obj", dia);
+	loadOBJ("dia.obj", dia);
 
 	Vertex v0 =middle_Vertex(model.vertices);
 	scale(trans);
+	scale(trans);
 	move(trans, mid);
 	//mid_spin(trans, v0, sp);
-	Vertex move = {0,0,0};
+
+	Vertex move = {-0.05,0.05,0};
 	models.push_back(model);
 	model_trans.push_back(trans);
 	model_move.push_back(move);
@@ -657,7 +775,6 @@ void Mouse(int button, int state, int x, int y)
 					erasenum.push_back(i);
 				}
 			}
-			int n = 0;
 			while(erasenum.size()>0){
 				models.erase(models.begin() + erasenum.back(), models.begin() + erasenum.back() + 1);
 				model_trans.erase(model_trans.begin() + erasenum.back(), model_trans.begin() + erasenum.back() + 1);
@@ -668,7 +785,7 @@ void Mouse(int button, int state, int x, int y)
 		slice.vertices.clear();
 		//change_line(trans, slice.vertices[0], slice.vertices[1]);
 	}
-	std::cout << "x = " << mouse.x << " y = " << mouse.y << std::endl;
+	//std::cout << "x = " << mouse.x << " y = " << mouse.y << std::endl;
 }
 void Motion(int x, int y)
 {
@@ -686,19 +803,53 @@ void TimerFunction(int value)
 {
 	for (int i = 0; i < model_move.size(); i++) {
 		move(model_trans[i], model_move[i]);
-
+		model_move[i].y -= 0.001;
 	}
 
 	for (int i = 0; i < models.size(); i++) {
 		Vertex v0 = middle_Vertex(models[i].vertices);
 		vector_spin(models, i, v0, spin_model);
 	}
+
+	//밖으로 나간 모델 제거
+	int model_num = models.size();
+	std::vector<int> erasenum;
+	for (int i = 0; i < model_num; i++) {
+		Vertex v0 = middle_Vertex(models[i].vertices);
+		change_dot(model_trans[i], v0);
+		if ( v0.x>2 ||v0.x<-2|| v0.y<-2) {
+			erasenum.push_back(i);
+		}
+	}
+	while (erasenum.size() > 0) {
+		models.erase(models.begin() + erasenum.back(), models.begin() + erasenum.back() + 1);
+		model_trans.erase(model_trans.begin() + erasenum.back(), model_trans.begin() + erasenum.back() + 1);
+		model_move.erase(model_move.begin() + erasenum.back(), model_move.begin() + erasenum.back() + 1);
+		erasenum.pop_back();
+	}
+	//std::cout << "erase:" << models.size() << std::endl;
+
+	//
+	if (spone_cnt > 100) {
+		Vertex move = { -0.08,0.06,0 };
+		int rand_num= rand() % 100;
+		if (rand_num < 50) {
+			models.push_back(model);
+		}
+		else {
+			models.push_back(dia);
+		}
+		model_trans.push_back(trans);
+		model_move.push_back(move);
+		spone_cnt = 0;
+	}
+	spone_cnt++;
+
 	glutPostRedisplay(); // 화면 재 출력
 	if (puese) {
 		glutTimerFunc(Timerspeed, TimerFunction, 1); // 타이머함수 재 설정
 	}
 }
-
 
 //-------------------------------------------------------------------------
 
@@ -786,6 +937,13 @@ float len_notsqrt(Vertex v1, Vertex v2) {
 float len(Vertex v1, Vertex v2) {
 	return sqrt((v1.x - v2.x) * (v1.x - v2.x) + (v1.y - v2.y) * (v1.y - v2.y) + (v1.z - v2.z) * (v1.z - v2.z));
 }
+Vertex crossProduct(const Vertex& v1, const Vertex& v2) {
+	return {
+		v1.y * v2.z - v1.z * v2.y,
+		v1.z * v2.x - v1.x * v2.z,
+		v1.x * v2.y - v1.y * v2.x
+	};
+}
 //삼각형 내부의 점 체크
 float sign(Vertex v1, Vertex v2, Vertex v3) {
 	return (v1.x - v3.x) * (v2.y - v3.y) - (v2.x - v3.y) * (v1.y - v3.y);
@@ -820,7 +978,7 @@ void InitBuffer(const Model& model) {
 	// 색상 VBO 생성 및 색상 데이터 전송
 	glGenBuffers(1, &vbo[1]);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-	glBufferData(GL_ARRAY_BUFFER, colors.size() * sizeof(Color), colors.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, model.vertices.size() * sizeof(Vertex), model.colors.data(), GL_STATIC_DRAW);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Color), (GLvoid*)0);
 	glEnableVertexAttribArray(1);
 
@@ -848,6 +1006,7 @@ bool loadOBJ(const std::string& filename, Model& model) {
 	}
 
 	std::string line;
+	int i = 0;
 	while (std::getline(file, line)) {
 		std::istringstream iss(line);
 		std::string prefix;
@@ -856,7 +1015,10 @@ bool loadOBJ(const std::string& filename, Model& model) {
 		if (prefix == "v") {
 			Vertex vertex;
 			iss >> vertex.x >> vertex.y >> vertex.z;
+
 			model.vertices.push_back(vertex);
+			model.colors.push_back(colors[i]);
+			i++;
 		}
 		else if (prefix == "vn") {
 
