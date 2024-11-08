@@ -50,6 +50,7 @@ void Motion(int x, int y);
 void TimerFunction(int value);
 GLvoid Reshape(int w, int h);
 char* filetobuf(const char* file);
+void drawText(const std::string& text, float x, float y);
 
 void clear_mat();
 void move(glm::mat4& trans, Vertex move);
@@ -117,28 +118,20 @@ bool cut_check(Model m, Vertex &p1, Vertex &p2) {
 	// 
 	// x = p1.x + t*(p2.x-p1.x)
 	// y = p1.y + t*(p2.y-p1.y)
-	// (p1.x + t*p2.x - m_v.x)^2 + (p1.y + t*p2.y - m_v.y)^2 = ln
-
-	//(tx+t*p2.x)^2 + (ty+t*p2.y)^2 = ln
-	// (p2.x)^2 *t^2 + 2t* (p2.x*tx) + tx^2   +   
 	
 	float a = ((p2.x - p1.x) *(p2.x - p1.x)) + ((p2.y - p1.y) * (p2.y - p1.y));
 	float b = 2 * (p2.x - p1.x) * tx + 2 * (p2.y - p1.y) * ty;
 	float c = tx * tx + ty * ty -ln;
 	float dx = (a*a) - 4 * b * c;
 	if (dx > 0) {
-		/*if (ln < len_notsqrt(m_v, p1) && ln < len_notsqrt(m_v, p2)) {
-			std::cout << "true" << std::endl;
-			return 1;
-		}*/
 		float t1 = (-b + sqrt(dx)) / 2 / a;
 		float t2 = (-b - sqrt(dx)) / 2 / a;
-		std::cout << "t1: " << t1 << "  t2" << t2 << std::endl;
+		//std::cout << "t1: " << t1 << "  t2" << t2 << std::endl;
 		if (0.8 < t1  && t1<1.8  && 0<-t2 && -t2<1) {
-			std::cout << "true" << std::endl;
+			//std::cout << "true" << std::endl;
 			return 1;
 		}
-		std::cout << "fail" << std::endl;
+		//std::cout << "fail" << std::endl;
 	}
 	return 0;
 }
@@ -304,7 +297,7 @@ void make_face(std::vector<Face> &newface, std::vector < Vertex > dots, int n) {
 
 bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Vertex> &v, int modelnum , Vertex p1 ,Vertex p2 ) {
 	change_line(t[modelnum], p1, p2);
-	
+	//잘리는 부분인지 확인
 	if (!cut_check(m[modelnum], p1, p2)) {
 		//std::cout << "fail" << std::endl;
 		return 0;
@@ -312,17 +305,17 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 	
 	std::vector < Vertex > dots;
 	std::vector < Color > cols;
-	//dots.clear(); //나중에 도트 위치 옮기기
 	Vertex ck = {0,0,0};
 	Color cc = {0,0,0};
 	float pnt=0;
 	Model up;
 	Model down;
-	
+	bool linea = 1;
 	Vertex vec;
 	std::vector < int > ck_up;
 	std::vector < int > ck_down;
 	int up_ck = 0, down_ck=0;
+	//상하 구별
 	if (p2.x == p1.x) {
 		for (int i = 0; m[modelnum].vertices.size()>i; i++) {
 			vec = m[modelnum].vertices[i];
@@ -362,15 +355,15 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 				down_ck++;
 			}
 		}
-
+		linea = (p2.y - p1.y) / (p2.x - p1.x)>0;
 	}
-
 	if (up_ck  == m[modelnum].vertices.size()) {
 		return 0;
 	}
 	else if(up_ck  == 0){
 		return 0;
 	}
+
 	int n = m[modelnum].vertices.size();
 	std::vector<Face> newface;
 	//컷팅
@@ -506,14 +499,20 @@ bool model_cut(std::vector<Model> &m, std::vector<glm::mat4> &t, std::vector<Ver
 		}
 	}
 	//m.erase(m.begin()+modelnum, m.begin() + modelnum+1);
-	Vertex left = { -0.01,0,0 };
-	Vertex right = { 0.01,0,0 };
+	Vertex left = { -0.015,0,0 };
+	Vertex right = { 0.015,0,0 };
 	m.push_back(up);
 	m.push_back(down);
 	t.push_back(t[modelnum]);
 	t.push_back(t[modelnum]);
-	v.push_back(left);
-	v.push_back(right);
+	if (linea) {
+		v.push_back(left);
+		v.push_back(right);
+	}
+	else {
+		v.push_back(right);
+		v.push_back(left);
+	}
 	//m[modelnum].faces.erase(m[modelnum].faces.begin(), m[modelnum].faces.begin() + 12);
 
 
@@ -555,20 +554,33 @@ GLchar errorLog[512];
 GLuint shaderID;
 GLuint vao, vbo[2], ebo;
 Vertex mouse;
+
+Color BLACK = { 0.0, 0.0, 0.0 };
+Color GREAY = { 0.5, 0.5, 0.5 };
+Color BLUE = { 0, 0, 1 };
 //---------------------------------------------------------------------------------------------------
 
 Model mid_line = { {{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1} }, };
 Model slice;
+Model basket = { {{-0.2,-0.8,0},{0.2,-0.8,0},{0.2,-0.9,0},{-0.2,-0.9,0}} ,{BLUE,BLUE,BLUE,BLUE},{{0,1,2},{0,2,3} } };
+//Model slice_basket;
+Model box = { {{-1,1,0},{1,1,0}} ,{{BLUE},{BLUE},{BLUE},{BLUE} }, };
+glm::mat4 basket_trans(1.0f);
+Vertex basket_move = {0.01,0,0};
 
 std::vector<Model> models;
+std::vector<Model> box_models;
+Model m_road;
 std::vector<glm::mat4> model_trans;
 std::vector<Vertex> model_move;
 
 Model model;
 Model dia;
 glm::mat4 trans(1.0f);
+glm::mat4 trans2(1.0f);
 Vertex sp = { 30,-30,0 };
 Vertex mid = { 4,-0.5,-0.5 };
+Vertex mid2 = { -5,-0.5,-0.5 };
 Vertex v0 = middle_Vertex(model.vertices);
 std::vector<Color> colors = {
 	{1.0, 0.0, 0.0}, // 빨간색
@@ -578,7 +590,7 @@ std::vector<Color> colors = {
 	{0.0, 1.0, 1.0}, // 시안
 	{1.0, 0.0, 1.0}, // 마젠타
 	{0.0, 0.0, 0.0}, // 검은색
-	{0.5, 0.5, 0.5},  // 흰색
+	{0.5, 1, 0.5},  // 흰색
 	////////
 	{ 1.0, 0.0, 0.0 }, // 빨간색
 	{0.0, 1.0, 0.0}, // 초록색
@@ -593,15 +605,18 @@ std::vector<Color> colors = {
 	{0.0, 1.0, 1.0}, // 시안
 	{1.0, 0.0, 1.0} // 마젠타
 };
-bool cmdc = 1;
-bool cmdh = 1;
+bool cmde = 0;
+//bool cmdh = 1;
 bool cmdw;
 bool puese = 1;
-int spin2[2] = { 0,0 };
 Vertex spin_model = {1,1,0};
-Vertex move_model;
+//Vertex move_model;
 
-int Timerspeed = 80;
+int Score = 0;
+int Combo = 0;
+int Combo_timer = 0;
+
+int Timerspeed = 30;
 int spone_cnt;
 
 //--------------------- 메인 함수----------------------------------------------------------------------------
@@ -625,9 +640,12 @@ int main(int argc, char** argv) //--- 윈도우 출력하고 콜백함수 설정
 	scale(trans);
 	scale(trans);
 	move(trans, mid);
+	scale(trans2);
+	scale(trans2);
+	move(trans2, mid2);
 	//mid_spin(trans, v0, sp);
 
-	Vertex move = {-0.05,0.05,0};
+	Vertex move = { -0.08,0.06,0 };
 	models.push_back(model);
 	model_trans.push_back(trans);
 	model_move.push_back(move);
@@ -653,18 +671,44 @@ GLvoid drawScene() //--- 콜백 함수: 그리기 콜백 함수
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glEnable(GL_DEPTH_TEST);
-	//glDisable(GL_CULL_FACE);
 
 	clear_mat();
-	/*InitBuffer(mid_line);
-	glPointSize(5.0);
-	glDrawArrays(GL_LINES, 0, 4);*/
+	std::string str = "Score: ";
+	str += std::to_string(Score);
+	
+	drawText(str, -0.1, 0.9);
+	str = "Combo: ";
+	str += std::to_string(Combo);
+	drawText(str, -0.1, 0.8);
+	
 	if (slice.vertices.size() == 2) {
 		InitBuffer(slice);
 		glPointSize(5.0);
+		//glColor3f(1.0f, 0.0f, 0.0f);
 		glDrawArrays(GL_LINES, 0, 2);
 	}
-
+	if (cmde) {
+		InitBuffer(m_road);
+		glPointSize(5.0);
+		glDrawArrays(GL_LINES, 0, m_road.vertices.size());
+	}
+	
+	for (int i = 0; i < box_models.size(); i++) {
+		InitBuffer(box_models[i]);
+		unsigned int transformLocation = glGetUniformLocation(shaderID, "transform");
+		glUniformMatrix4fv(transformLocation, 1, GL_FALSE, glm::value_ptr(basket_trans));
+		if (cmdw) {
+			glDrawElements(GL_TRIANGLES, box_models[i].faces.size() * 3, GL_UNSIGNED_INT, 0);
+		}
+		else {
+			glDrawElements(GL_LINES, box_models[i].faces.size() * 3, GL_UNSIGNED_INT, 0);
+		}
+	}
+	/*unsigned int transformLocation = glGetUniformLocation(shaderID, "transform");
+	glUniformMatrix4fv(transformLocation, 1, GL_FALSE, glm::value_ptr(basket_trans));*/
+	clear_mat();
+	InitBuffer(basket);
+	glDrawElements(GL_TRIANGLES, basket.faces.size() * 3, GL_UNSIGNED_INT, 0);
 
 	Model cpy;
 	for (int i = 0; i < models.size(); i++) {
@@ -684,7 +728,6 @@ GLvoid drawScene() //--- 콜백 함수: 그리기 콜백 함수
 	InitBuffer(mod);
 	glPointSize(5.0);
 	glDrawArrays(GL_POINTS, 0, dots.size());*/
-
 	glutSwapBuffers(); // 화면에 출력하기
 	//glutSwapBuffers(); // 화면에 출력하기
 }
@@ -692,8 +735,8 @@ GLvoid drawScene() //--- 콜백 함수: 그리기 콜백 함수
 void Keyboard(unsigned char key, int x, int y)
 {
 	switch (key) {
-	case 'c':
-		//cmdc = 1;
+	case 'e':
+		cmde = !cmde;
 		break;
 	case 'p':
 		//cmdc = 0;
@@ -702,17 +745,17 @@ void Keyboard(unsigned char key, int x, int y)
 			glutTimerFunc(Timerspeed, TimerFunction, 1);
 		}
 		break;
-	case 'h':
-		cmdh = !cmdh;
+	case 'd':
+		box_models.clear();
 		break;
 	case 'w':
 		cmdw = !cmdw;
 		break;
 	case '+':
-		if(Timerspeed>10) Timerspeed -= 10;
+		if(Timerspeed>10) Timerspeed -= 5;
 		break;
 	case '-':
-		if (Timerspeed < 100) Timerspeed += 10;
+		if (Timerspeed < 70) Timerspeed += 5;
 		break;
 	case 'x':
 		spin_model.x = (spin_model.x == 0) ? 1 : 0;
@@ -735,26 +778,18 @@ void Keyboard(unsigned char key, int x, int y)
 	case 's':
 		models[0] = model;
 		break;
+	case 'q':
+		glutLeaveMainLoop();
+		exit(0);
+		break;
 	}
 }
 void SpecialKeyboard(int key, int x, int y){
 	switch (key) {
 	case GLUT_KEY_UP:
-		move_model = {0,0.1,0};
-		move(trans, move_model);
+		
 		break;
-	case GLUT_KEY_DOWN:
-		move_model = { 0,-0.1,0 };
-		move(trans, move_model);
-		break;
-	case GLUT_KEY_RIGHT:
-		move_model = {0.1,0,0 };
-		move(trans, move_model);
-		break;
-	case GLUT_KEY_LEFT:
-		move_model = { -0.1,0,0 };
-		move(trans, move_model);
-		break;
+	
 	}
 
 }
@@ -773,6 +808,8 @@ void Mouse(int button, int state, int x, int y)
 			for (int i = 0; i < model_num; i++) {
 				if (model_cut(models, model_trans, model_move, i, slice.vertices[0], slice.vertices[1] )) {
 					erasenum.push_back(i);
+					Combo += 1;
+					Combo_timer = 0;
 				}
 			}
 			while(erasenum.size()>0){
@@ -806,18 +843,65 @@ void TimerFunction(int value)
 		model_move[i].y -= 0.001;
 	}
 
+	if (cmde) {
+		m_road.vertices.clear();
+		m_road.colors.clear();
+	}
 	for (int i = 0; i < models.size(); i++) {
 		Vertex v0 = middle_Vertex(models[i].vertices);
 		vector_spin(models, i, v0, spin_model);
+		if (cmde) {
+			//std::cout << "cmde on" << std::endl;
+			change_dot(model_trans[i], v0);
+			for (int j = 0; j < 50; j++) {
+				m_road.vertices.push_back(v0);
+				m_road.colors.push_back(GREAY);
+				v0.x += model_move[i].x;
+				v0.y += model_move[i].y;
+				v0.y += -0.004*j;
+			}
+		}
+	}
+	
+	for (int i = 0; i < basket.vertices.size(); i++) {
+		basket.vertices[i].x += basket_move.x;
+	}
+	if (basket.vertices[0].x < -1  || basket.vertices[1].x > 1 ) {
+		basket_move.x = -basket_move.x;
+	}
+	move(basket_trans, basket_move);
+
+	int model_num = models.size();
+	std::vector<int> erasenum;
+	for (int i = 0; i < model_move.size(); i++) {
+		Vertex v1 = {0,0,0};
+		for (int j = 0; j < models[i].vertices.size(); j++) {
+			v1 = models[i].vertices[j];
+			change_dot(model_trans[i], v1);
+			//모델의 점이 바구니와 닿으면
+			if (v1.y < basket.vertices[0].y && v1.y >= basket.vertices[0].y -0.1
+				&& v1.x > basket.vertices[0].x && v1.x < basket.vertices[1].x) {
+				erasenum.push_back(i);
+				Score += 10;
+				Score += Combo;
+
+				for (int k = 0; k < models[i].vertices.size(); k++) {
+					change_dot(model_trans[i], models[i].vertices[k]);
+					glm::mat4 inv = glm::inverse(basket_trans);
+					change_dot(inv, models[i].vertices[k]);
+				}
+				box_models.push_back(models[i]);
+				
+				break;
+			}
+		}
 	}
 
 	//밖으로 나간 모델 제거
-	int model_num = models.size();
-	std::vector<int> erasenum;
 	for (int i = 0; i < model_num; i++) {
 		Vertex v0 = middle_Vertex(models[i].vertices);
 		change_dot(model_trans[i], v0);
-		if ( v0.x>2 ||v0.x<-2|| v0.y<-2) {
+		if ( v0.x>2 ||v0.x<-2|| v0.y<-1) {
 			erasenum.push_back(i);
 		}
 	}
@@ -830,8 +914,9 @@ void TimerFunction(int value)
 	//std::cout << "erase:" << models.size() << std::endl;
 
 	//
-	if (spone_cnt > 100) {
+	if (spone_cnt > 50) {
 		Vertex move = { -0.08,0.06,0 };
+		move.y = (float)(rand() % 4 + 5) / 100;
 		int rand_num= rand() % 100;
 		if (rand_num < 50) {
 			models.push_back(model);
@@ -839,11 +924,24 @@ void TimerFunction(int value)
 		else {
 			models.push_back(dia);
 		}
-		model_trans.push_back(trans);
-		model_move.push_back(move);
+		rand_num = rand() % 100;
+		if (rand_num < 50) {
+			model_trans.push_back(trans);
+			model_move.push_back(move);
+		}
+		else {
+			move.x = -move.x;
+			model_trans.push_back(trans2);
+			model_move.push_back(move);
+		}
 		spone_cnt = 0;
 	}
 	spone_cnt++;
+	if (Combo_timer > 30) {
+		Combo_timer = 0;
+		Combo = 0;
+	}
+	Combo_timer++;
 
 	glutPostRedisplay(); // 화면 재 출력
 	if (puese) {
@@ -1053,6 +1151,12 @@ bool loadOBJ(const std::string& filename, Model& model) {
 GLvoid Reshape(int w, int h) //--- 콜백 함수: 다시 그리기 콜백 함수
 {
 	glViewport(0, 0, w, h);
+}
+void drawText(const std::string& text, float x, float y) {
+	glRasterPos2f(x, y);
+	for (char c : text) {
+		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, c);
+	}
 }
 char* filetobuf(const char* file)
 {
