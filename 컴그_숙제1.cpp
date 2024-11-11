@@ -901,7 +901,7 @@ void TimerFunction(int value)
 	for (int i = 0; i < model_num; i++) {
 		Vertex v0 = middle_Vertex(models[i].vertices);
 		change_dot(model_trans[i], v0);
-		if ( v0.x>2 ||v0.x<-2|| v0.y<-1) {
+		if ( v0.x>2 ||v0.x<-3|| v0.y<-1) {
 			erasenum.push_back(i);
 		}
 	}
